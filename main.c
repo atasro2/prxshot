@@ -33,6 +33,7 @@
 #include "pbp.h"
 #include "minIni.h"
 #include "logger.h"
+#include "PNGenc.h"
 
 PSP_MODULE_INFO("prxshot", 0x1000, 0, 3);
 PSP_MAIN_THREAD_ATTR(0);
@@ -92,13 +93,13 @@ int take_shot(const char *path) {
 	SceUID block_id = -1;
 	int frame_width, pixel_format;
 	unsigned int ptr;
-	void *mem = get_mem(BMP_SIZE, &block_id);
+	void *mem = get_mem(sizeof(PNGIMAGE), &block_id);
 	if(mem) {
 		sceDisplayWaitVblankStart();
 		if(sceDisplayGetFrameBuf(&frame_addr, &frame_width, &pixel_format, PSP_DISPLAY_SETBUF_NEXTFRAME) >= 0 && frame_addr) {
-			ptr = (unsigned int)frame_addr;
+            ptr = (unsigned int)frame_addr;
 			ptr |= ptr & 0x80000000 ?  0xA0000000 : 0x40000000;
-			bitmapWrite((void *)ptr, mem, pixel_format, path);
+			pngWrite((void *)ptr, mem, pixel_format, path, frame_width);
 			block_id >= 0 ? kfree(block_id) : kfree_volatile();
 			return 0;
 		}
@@ -272,13 +273,13 @@ inline void boot_info() {
 }
 #endif
 
-inline void read_settings(const char *argp) {
+static inline void read_settings(const char *argp) {
     create_path(ini_path, argp, "prxshot.ini");
     key_button = ini_getlhex("General", "ScreenshotKey", PSP_CTRL_NOTE, ini_path);
     kprintf("Read ScreenshotKey: %08X\n", key_button);
     key_timeout = ini_getl("General", "KeyTimeout", 0, ini_path);
     kprintf("Read KeyTimeout: %08X\n", key_timeout);
-    ini_gets("General", "ScreenshotName", "%s/pic_%04d.bmp", picture, sizeof(picture), ini_path);
+    ini_gets("General", "ScreenshotName", "%s/pic_%04d.png", picture, sizeof(picture), ini_path);
     kprintf("Read ScreenshotName: %s\n", picture);
     force_ms0 = ini_getbool("General", "PSPGoUseMS0", 0, ini_path);
     clear_cache = ini_getbool("General", "XMBClearCache", 0, ini_path);
@@ -290,7 +291,7 @@ inline void read_settings(const char *argp) {
     }
 }
 
-inline int refresh_directory(const char *dir) {
+static inline int refresh_directory(const char *dir) {
     if(sceKernelInitKeyConfig() == PSP_INIT_KEYCONFIG_VSH) {
         SceUID dfd = sceIoDopen(dir);
         if(dfd >= 0) {
